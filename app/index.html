@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat Learning</title>
+    <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css"
+          integrity="sha512-dTfge/zgoMYpP7QbHy4gWMEGsbsdZeCXz7irItjcC3sPUFtf0kuFbDz/ixG7ArTxmDjLXDmezHubeNikyKGVyQ=="
+          crossorigin="anonymous">
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"
+            integrity="sha512-K1qjQ+NcF2TYO/eI3M6v8EiNYZfA95pQumfvcVrTHtwQVDG+aHRqLi/ETn2uB+1JqwYqVG3LIvdm9lj6imS/pQ=="
+            crossorigin="anonymous"></script>
+    <style>
+
+        * {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+    <script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
+</head>
+<body>
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="panel panel-success">
+                <div class="panel-heading">
+                    <h3 class="panel-title">Chat</h3>
+                </div>
+                <div class="panel-body" id="chatPanel" style="height: 400px; overflow-y:scroll;">
+                    <ul id="messages" class="list-group"></ul>
+
+                </div>
+                <div class="panel-footer">
+                    <form action="">
+                        <div class="form-group">
+                            <input id="writtenMessage" class="form-control" placeholder="Text input"
+                                   autocomplete="off"/>
+                            <button class="btn btn-lg btn-success">Send</button>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+
+        </div>
+        <div class="col-md-4">
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <h3 class="panel-title">Users Connected</h3>
+                </div>
+                <div class="panel-body">
+                    <ul id="people"></ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <h3 class="panel-title">Events</h3>
+                </div>
+                <div class="panel-body">
+                    <ul id="events"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+<script>
+    var name = prompt('Insert user name');
+
+</script>
+
+<script>
+    var socket = io();
+    $('form').submit(function () {
+        var regex = new RegExp("/[^]+");
+        if ($('#writtenMessage').val() != "" && $('#writtenMessage').val().split(' ')[0].toLowerCase() != "/whisper" && regex.test($('#writtenMessage').val().split(' ')[0].toLowerCase()) != true) {
+            socket.emit('chat message', $('#writtenMessage').val());
+            $('#writtenMessage').val('');
+
+            return false;
+        } else if ($('#writtenMessage').val().split(' ')[0].toLowerCase() == "/whisper") {
+            var message = $('#writtenMessage').val().split(" ");
+            var nameFromMessage = message[1];
+            var spliceMessage = message;
+            spliceMessage.splice(0, 2);
+            var messageToSend = spliceMessage.join(' ');
+            socket.emit('private message', nameFromMessage, messageToSend, false);
+            $('#writtenMessage').val('');
+
+            return false;
+        } else if ($('#writtenMessage').val().split(' ')[0].toLowerCase() != "/whisper" && regex.test($('#writtenMessage').val().split(' ')[0].toLowerCase()) == true) {
+            socket.emit('private message', '', '', true);
+            $('#writtenMessage').val('');
+
+            return false;
+        } else {
+            return false;
+        }
+    });
+
+    if (name != "") {
+        socket.emit("join", name);
+    }
+
+    socket.on('chat message', function (user, msg) {
+        $('#messages').append($('<li class="list-group-item">').text(user + ": " + msg));
+        document.getElementById('chatPanel').scrollTop = document.getElementById('chatPanel').scrollHeight;
+        socket.emit('stoppedTyping');
+    });
+    socket.on('connected', function (msg) {
+        $('#events').append($('<li class="list-group-item list-group-item-success">').text(msg));
+    });
+    socket.on('disconnect', function (msg) {
+        $('#events').append($('<li class="list-group-item list-group-item-danger">').text(msg));
+    });
+    socket.on("update-people", function (people) {
+        $("#people").empty();
+        $.each(people, function (clientid, name) {
+            $('#people').append($('<li class="list-group-item">').text(name));
+        });
+    });
+    socket.on('typing', function (msg) {
+        $('#events').append($('<li class="list-group-item list-group-item-info typing">').text(msg));
+    });
+    socket.on('stoppedTyping', function () {
+        $('#events .typing').each(function () {
+            $(this).remove();
+        })
+    });
+    socket.on('private message', function (msg) {
+        $('#messages').append($('<li class="list-group-item list-group-item-success">').text(msg));
+    });
+
+    var typing = false;
+    var timeout;
+    $('#writtenMessage').focus(function () {
+        $(this).keyup(function (e) {
+            if (typing == false && e.which !== 13 && e.which !== 8) {
+                typing = true;
+                socket.emit('typing');
+                timeout = setTimeout(function () {
+                    typing = false;
+                    socket.emit('stoppedTyping');
+                }, 5000)
+            } else if (e.which == 13) {
+                clearTimeout(timeout);
+                typing = false;
+                socket.emit('stoppedTyping');
+
+            } else if (e.which == 8 && $('#writtenMessage').val() == "") {
+                clearTimeout(timeout);
+                typing = false;
+                socket.emit('stoppedTyping');
+            }
+
+
+        });
+    })
+
+
+</script>
+
+</body>
+</html>
+
